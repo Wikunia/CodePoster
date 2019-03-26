@@ -13,9 +13,9 @@ start_x = 10
 start_y = 10
 size_y = 5910
 size_x = 8268
-fsize = 27
+fsize = -1
 space_code_line = 0
-line_padding = 6
+line_padding = 5
 
 function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::Color, replace::Color; last_check=nothing, last_check_params=nothing)
     if outside == replace
@@ -97,7 +97,48 @@ function more_than(img, changed_at, changed_from, params)
     end
 end
 
-function create_poster()
+function create_poster(fsize)
+    # estimate the fontsize if currently set to -1
+    test_line = ""
+    if fsize == -1
+        nchars = 0
+        cl = 0
+        for (root, dirs, files) in walkdir(folder)
+            if !occursin(ignore,root)
+                for file in files
+                    if occursin(pattern, file)
+                        open(root*"/"*file) do file
+                            for ln in eachline(file)
+                                stripped = strip(ln)*" "
+                                stripped = replace(stripped, r"\s+" => " ") 
+                                nchars += length(stripped)
+                                cl += 1
+                                if cl % 10 == 0
+                                    test_line *= stripped
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
+    possible_pixel_per_char = pixel_for_chars/nchars
+    fsize = 1
+    c_pixel_per_char = 0
+    while c_pixel_per_char < possible_pixel_per_char
+        fontsize(fsize)
+        w_adv = textextents(test_line)[5]
+        w_adv /= length(test_line)
+        c_pixel_per_char = (line_padding+fsize)*w_adv
+        pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
+        possible_pixel_per_char = pixel_for_chars/nchars
+        fsize += 0.1
+    end
+    fsize -= 0.2
+    println("Choosed font size: ", fsize)
+
     Drawing(size_x, size_y, "code.png")
     origin(Point(fsize,fsize))
     background("black")
@@ -112,6 +153,7 @@ function create_poster()
                         for ln in eachline(file)
                             stripped = strip(ln)*" "
                             stripped = replace(stripped, r"\s+" => " ") 
+                            # stripped = test_line
                             size_ln = textextents(stripped)
                             xadv_ln = size_ln[5]
                             yadv_ln = size_ln[6]
@@ -142,8 +184,11 @@ function create_poster()
                 end
             end
         end
-    end   
+    end  
     println("last_y: ", last_y+fsize)
+    if last_y+fsize > size_y
+        @warn "You might wanna choose a different font size as at the moment some part of your awesome code isn't in the poster"
+    end
     println("last_x: ", last_x)
     finish()
     println("Saved code")
@@ -166,7 +211,7 @@ function create_poster()
     last_check_params = Dict{Symbol,Any}()
     last_check_params[:img] = text_img
     last_check_params[:outside_color] = RGB(0,0,0)
-    last_check_params[:more_than] = 0.5 # 50%
+    last_check_params[:more_than] = 0.75 # 75%
 
     for y in 1:size_y, x in 1:size_x
         yx = CartesianIndex(y,x)
@@ -179,4 +224,4 @@ function create_poster()
     save("poster.png", code_img)
 end
 
-@time create_poster()
+@time create_poster(fsize)
