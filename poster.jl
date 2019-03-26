@@ -1,21 +1,14 @@
-using Luxor
-using HttpCommon
-using Images
-using FileIO
+#!/usr/bin/env julia
+using ArgParse
 using Colors
 
-folder = "/home/ole/Julia/Juniper"
-pattern = r".jl$"
-ignore = r"(\/\.git|\/test|\/Ideas|\/docs)"
-center_text = "Juniper.jl"
-font_size_center_text = 1400
-start_x = 10
-start_y = 10
-size_y = 5910
-size_x = 8268
-fsize = -1
-space_code_line = 0
-line_padding = 5
+function extension(filename::String)
+    try 
+        return match(r"\.[A-Za-z0-9]+$", filename).match
+    catch 
+        return ""
+    end
+end
 
 function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::Color, replace::Color; last_check=nothing, last_check_params=nothing)
     if outside == replace
@@ -97,16 +90,69 @@ function more_than(img, changed_at, changed_from, params)
     end
 end
 
-function create_poster(fsize)
+function parse_code_color(code_color_between)
+    parts = split(code_color_between,",")
+    color_picker = Dict{Symbol,Tuple{Float64,Float64}}()
+    if length(parts) == 1
+        range = parse.(Float64,split(parts[1],"-"))
+        color_picker[:r] = (range[1], range[2])
+        color_picker[:g] = (range[1], range[2])
+        color_picker[:b] = (range[1], range[2])
+        return color_picker
+    elseif length(parts) == 3
+        range_r = parse.(Float64,split(parts[1],"-"))
+        color_picker[:r] = (range_r[1], range_r[2])
+        range_g = parse.(Float64,split(parts[2],"-"))
+        color_picker[:g] = (range_g[1], range_g[2])
+        range_b = parse.(Float64,split(parts[3],"-"))
+        color_picker[:b] = (range_b[1], range_b[2])
+        return color_picker
+    else
+        @error "Your code color range parameter must be of the form Float64-Float64 i.e 0.2-0.5 or three of those values for r,g,b"
+        @info "The default range is used now"
+        color_picker[:r] = (0.2, 0.5)
+        color_picker[:g] = (0.2, 0.5)
+        color_picker[:b] = (0.2, 0.5)
+        return color_picker
+    end
+end
+
+function rand_between(bounds::Tuple{Float64,Float64})
+    return bounds[1]+rand()*bounds[2]
+end
+
+function create_poster(args)
+    folder = args["folder"]
+    fsize = args["fsize"]
+    font_size_center_text = args["fsize_text"]
+    ext_pattern = args["ext"]
+    ignore = args["ignore"]
+    center_text = args["center_text"]
+    start_x = args["start_x"]
+    start_y = args["start_y"]
+    height = args["height"]
+    width = args["width"]
+    line_margin = args["line_margin"]
+    center_color = args["center_color"]
+    code_color_between = args["code_color_range"]
+    rand_color = parse_code_color(code_color_between)
+    
+
+    size_x = convert(Int,round(0.393701*width*args["dpi"]))
+    size_y = convert(Int,round(0.393701*height*args["dpi"]))
+
+    println("Size of the poster in pixel: ", string(size_x)*"x"*string(size_y))
+
     # estimate the fontsize if currently set to -1
     test_line = ""
     if fsize == -1
+        Drawing(size_x, size_y, "code.png")
         nchars = 0
         cl = 0
         for (root, dirs, files) in walkdir(folder)
             if !occursin(ignore,root)
                 for file in files
-                    if occursin(pattern, file)
+                    if occursin(ext_pattern,extension(file))
                         open(root*"/"*file) do file
                             for ln in eachline(file)
                                 stripped = strip(ln)*" "
@@ -122,22 +168,23 @@ function create_poster(fsize)
                 end
             end
         end
-    end
-    pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
-    possible_pixel_per_char = pixel_for_chars/nchars
-    fsize = 1
-    c_pixel_per_char = 0
-    while c_pixel_per_char < possible_pixel_per_char
-        fontsize(fsize)
-        w_adv = textextents(test_line)[5]
-        w_adv /= length(test_line)
-        c_pixel_per_char = (line_padding+fsize)*w_adv
         pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
         possible_pixel_per_char = pixel_for_chars/nchars
-        fsize += 0.1
+        fsize = 1
+        c_pixel_per_char = 0
+        while c_pixel_per_char < possible_pixel_per_char
+            fontsize(fsize)
+            w_adv = textextents(test_line)[5]
+            w_adv /= length(test_line)
+            c_pixel_per_char = (line_margin+fsize)*w_adv
+            pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
+            possible_pixel_per_char = pixel_for_chars/nchars
+            fsize += 0.1
+        end
+        fsize -= 0.2
+        println("Automatic font size: ", fsize)
+        finish()
     end
-    fsize -= 0.2
-    println("Choosed font size: ", fsize)
 
     Drawing(size_x, size_y, "code.png")
     origin(Point(fsize,fsize))
@@ -148,19 +195,20 @@ function create_poster(fsize)
     for (root, dirs, files) in walkdir(folder)
         if !occursin(ignore,root)
             for file in files
-                if occursin(pattern, file)
+                if occursin(ext_pattern, file)
                     open(root*"/"*file) do file
                         for ln in eachline(file)
                             stripped = strip(ln)*" "
                             stripped = replace(stripped, r"\s+" => " ") 
-                            # stripped = test_line
                             size_ln = textextents(stripped)
                             xadv_ln = size_ln[5]
                             yadv_ln = size_ln[6]
-                            sethue(rand(4:10)/20, rand(4:10)/20, rand(4:10)/20)
-                            if last_x+space_code_line+xadv_ln > size_x-start_x
+                            sethue(rand_between(rand_color[:r]), 
+                                   rand_between(rand_color[:g]),
+                                   rand_between(rand_color[:b]))
+                            if last_x+xadv_ln > size_x-start_x
                                 # print it anyway but go to next line later
-                                origin(Point(last_x+space_code_line,last_y))
+                                origin(Point(last_x,last_y))
                                 break_after = 1
                                 stripped_part = stripped[1:1]
                                 size_ln_part = textextents(stripped_part)
@@ -170,12 +218,12 @@ function create_poster(fsize)
                                     size_ln_part = textextents(stripped_part)
                                 end
                                 text(stripped[1:prevind(stripped,break_after)])
-                                origin(Point(start_x,last_y+fsize+line_padding))
+                                origin(Point(start_x,last_y+fsize+line_margin))
                                 text(stripped[break_after:end])
-                                last_y += fsize+line_padding
+                                last_y += fsize+line_margin
                                 last_x = textextents(stripped[break_after:end])[5]
                             else
-                                origin(Point(last_x+space_code_line,last_y))
+                                origin(Point(last_x,last_y))
                                 text(stripped)
                                 last_x += xadv_ln
                             end
@@ -195,13 +243,11 @@ function create_poster(fsize)
 
     Drawing(size_x, size_y, "text.png")
     fontsize(font_size_center_text)
-    fontface("Georgia-Bold")
     wtext, htext = textextents(center_text)[3:4]
     xbtext, ybtext = textextents("a")[1:2]
     background("black")
-    font_color = RGB(1.0,0.73,0.0)
-    sethue(font_color)
-    text(center_text, (size_x-wtext)/2, (size_y-htext)/2+font_size_center_text/2-ybtext/2)
+    sethue(center_color)
+    text(center_text, (size_x-wtext)/2, (size_y-htext)/2+htext/2-ybtext/2)
     finish()
     println("Saved text")
 
@@ -212,16 +258,109 @@ function create_poster(fsize)
     last_check_params[:img] = text_img
     last_check_params[:outside_color] = RGB(0,0,0)
     last_check_params[:more_than] = 0.75 # 75%
-
+    
+    println("Combining text and code...")
     for y in 1:size_y, x in 1:size_x
-        yx = CartesianIndex(y,x)
-        if text_img[yx] != RGB(0,0,0)
-            if !isapprox(code_img[yx],RGB(0,0,0)) && !isapprox(code_img[yx],font_color)
-                code_img = floodfill!(code_img, yx, RGB(0,0,0), font_color; last_check=more_than, last_check_params=last_check_params)
+        if text_img[y,x] != RGB(0,0,0)
+            if !isapprox(code_img[y,x],RGB(0,0,0)) && !isapprox(code_img[y,x],center_color)
+                yx = CartesianIndex(y,x)
+                code_img = floodfill!(code_img, yx, RGB(0,0,0), center_color; last_check=more_than, last_check_params=last_check_params)
             end
         end
     end
     save("poster.png", code_img)
+    println("DONE!!!")
+    println()
+    println("=======================================================================================================================================")
+    println("Before you print your poster please make sure that everything looks as expected ;)")
+    println("Take special care at the corners of the poster. If the code overflows or there is a big gap at the end try to change the font size.")
+    println("If it doesn't work as expected please file an issue.") 
+    println("Otherwise enjoy your poster and consider a small donation via PayPal:")
+    println("https://www.paypal.com/donate/?token=lq0Of0tLY5KGhmPV_2QDngKBt1vUucXysZNzWiC2Zs5V9lEWKXth8ksnUZBqxtL5yDCLHG&country.x=GB&locale.x=GB")
+    println("=======================================================================================================================================")
 end
 
-@time create_poster(fsize)
+function ArgParse.parse_item(::Type{Regex}, x::AbstractString)
+    return Regex(x)
+end
+
+function ArgParse.parse_item(::Type{RGB}, x::AbstractString)
+    parts = parse.(Float64,split(x,","))
+    return RGB(parts...)
+end
+
+function parse_commandline()
+    s = ArgParseSettings()
+
+    @add_arg_table s begin
+        "--folder", "-f"
+            help = "The code folder"
+            required = true
+        "--fsize"
+            help = "The font size for the code. Will be determined automatically if not specified"
+            arg_type = Float64
+            default = -1.0
+        "--ext"
+            help = "File extensions of the code seperate by , i.e jl,js,py"
+            arg_type = Regex
+            default = r"(\.jl|\.py|\.js|\.php)"
+        "--ignore"
+            help = "Ignore all paths of the following form. Form as in --ext"
+            arg_type = Regex
+            default = r"(\/\.git|test|Ideas|docs)"
+        "--center_text", "-t"
+            help = "The text which gets displayed in the center of your poster"
+            arg_type = String
+            default = "Test"
+        "--fsize_text"
+            help = "The font size for the center text."
+            arg_type = Float64
+            default = 1400.0
+        "--center_color", "-c"
+            help = "The color of center_text"
+            arg_type = RGB
+            default = RGB(1.0,0.73,0.0)
+        "--code_color_range"
+            help = "Range for the random color of each code line i.e 0.2-0.5 
+                    for a color between RGB(0.2,0.2,0.2) and RGB(0.5,0.5,0.5) or 0.1-0.3,0.2-0.5,0-1 to specify a range for r,g and b"
+            arg_type = String
+            default = "0.2-0.5"
+        "--width"
+            help = "Width of the poster in cm"
+            arg_type = Float64
+            default = 70.0
+        "--height"
+            help = "Width of the poster in cm"
+            arg_type = Float64
+            default = 50.0
+        "--dpi"
+            help = "DPI"
+            arg_type = Float64
+            default = 300.0
+        "--start_x"
+            help = "Start value for x like a padding left and right"
+            arg_type = Int64
+            default = 10
+        "--start_y"
+            help = "Start value for y like a padding top and \"bottom\""
+            arg_type = Int64
+            default = 10  
+        "--line_margin"
+            help = "Margin between two lines"
+            arg_type = Int64
+            default = 5
+    end
+
+    return parse_args(s)
+end
+
+if isinteractive() == false
+    args = parse_commandline()
+    println("Parsed arguments")
+    using Luxor
+    using HttpCommon
+    using Images
+    using FileIO
+    println("Included all libraries")
+    create_poster(args)
+end
