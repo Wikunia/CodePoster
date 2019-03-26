@@ -317,7 +317,7 @@ function parse_commandline()
             arg_type = Float64
             default = 1400.0
         "--center_color", "-c"
-            help = "The color of center_text"
+            help = "The color of center_text specify as r,g,b"
             arg_type = RGB
             default = RGB(1.0,0.73,0.0)
         "--code_color_range"
@@ -358,7 +358,6 @@ if isinteractive() == false
     args = parse_commandline()
     println("Parsed arguments")
     using Luxor
-    using HttpCommon
     using Images
     using FileIO
     println("Included all libraries")
