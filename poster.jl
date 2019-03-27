@@ -197,7 +197,7 @@ end
 function create_poster(args)
     folder = args["folder"]
     fsize = args["fsize"]
-    font_size_center_text = args["fsize_text"]
+    font_size_center_text = args["center_fsize"]
     ext_pattern = args["ext"]
     ignore = args["ignore"]
     center_text = args["center_text"]
@@ -330,7 +330,7 @@ function parse_commandline()
             help = "The text which gets displayed in the center of your poster"
             arg_type = String
             default = "Test"
-        "--fsize_text"
+        "--center_fsize"
             help = "The font size for the center text."
             arg_type = Float64
             default = 1400.0

@@ -47,7 +47,7 @@ optional arguments:
   -t, --center_text CENTER_TEXT
                         The text which gets displayed in the center of
                         your poster (default: "Test")
-  --fsize_text FSIZE_TEXT
+  --center_fsize CENTER_FSIZE_
                         The font size for the center text. (type:
                         Float64, default: 1400.0)
   -c, --center_color CENTER_COLOR
