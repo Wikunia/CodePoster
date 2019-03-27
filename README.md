@@ -1,7 +1,9 @@
 # CodePoster
 
 You're proud of your new code project and just want to see it day and night? 
-Make a poster out of your code with **CodePoster**
+Make a poster out of your code with **CodePoster**.
+
+If you want to read more about the project please check out my [blog post](http://opensourc.es/blog/codeposter)
 
 ## Possible results
 ![Standard version](normal_readme.png)
