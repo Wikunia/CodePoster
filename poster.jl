@@ -121,6 +121,79 @@ function rand_between(bounds::Tuple{Float64,Float64})
     return bounds[1]+rand()*bounds[2]
 end
 
+function automatic_font_size(args, size_x, size_y)
+    folder = args["folder"]
+    ext_pattern = args["ext"]
+    ignore = args["ignore"]
+    start_x = args["start_x"]
+    start_y = args["start_y"]
+    line_margin = args["line_margin"]
+
+    test_line = ""
+    Drawing(size_x, size_y, "code.png")
+    nchars = 0
+    cl = 0
+    for (root, dirs, files) in walkdir(folder)
+        if !occursin(ignore,root)
+            for file in files
+                if occursin(ext_pattern,extension(file))
+                    open(root*"/"*file) do file
+                        for ln in eachline(file)
+                            stripped = strip(ln)*" "
+                            stripped = replace(stripped, r"\s+" => " ") 
+                            nchars += length(stripped)
+                            cl += 1
+                            if cl % 10 == 0
+                                test_line *= stripped
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    fsize = 1
+    pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
+    possible_pixel_per_char = pixel_for_chars/nchars
+    c_pixel_per_char = 0
+    while c_pixel_per_char < possible_pixel_per_char
+        fontsize(fsize)
+        w_adv = textextents(test_line)[5]
+        w_adv /= length(test_line)
+        c_pixel_per_char = (line_margin+fsize)*w_adv
+        pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
+        possible_pixel_per_char = pixel_for_chars/nchars
+        fsize += 0.1
+    end
+    fsize -= 0.2
+    println("Automatic font size: ", fsize)
+    finish()
+    return fsize
+end
+
+function combine_text_code(center_color)
+    text_img = load("text.png")
+    code_img = load("code.png")
+
+    last_check_params = Dict{Symbol,Any}()
+    last_check_params[:img] = text_img
+    last_check_params[:outside_color] = RGB(0,0,0)
+    last_check_params[:more_than] = 0.75 # 75%
+
+    size_y, size_x = size(text_img)
+
+    println("Combining text and code...")
+    for y in 1:size_y, x in 1:size_x
+        if text_img[y,x] != RGB(0,0,0)
+            if !isapprox(code_img[y,x],RGB(0,0,0); atol=0.05) && !isapprox(code_img[y,x],center_color; atol=0.05)
+                yx = CartesianIndex(y,x)
+                code_img = floodfill!(code_img, yx, RGB(0,0,0), center_color; last_check=more_than, last_check_params=last_check_params)
+            end
+        end
+    end
+    return code_img
+end
+
 function create_poster(args)
     folder = args["folder"]
     fsize = args["fsize"]
@@ -137,53 +210,14 @@ function create_poster(args)
     code_color_between = args["code_color_range"]
     rand_color = parse_code_color(code_color_between)
     
-
     size_x = convert(Int,round(0.393701*width*args["dpi"]))
     size_y = convert(Int,round(0.393701*height*args["dpi"]))
 
     println("Size of the poster in pixel: ", string(size_x)*"x"*string(size_y))
 
     # estimate the fontsize if currently set to -1
-    test_line = ""
     if fsize == -1
-        Drawing(size_x, size_y, "code.png")
-        nchars = 0
-        cl = 0
-        for (root, dirs, files) in walkdir(folder)
-            if !occursin(ignore,root)
-                for file in files
-                    if occursin(ext_pattern,extension(file))
-                        open(root*"/"*file) do file
-                            for ln in eachline(file)
-                                stripped = strip(ln)*" "
-                                stripped = replace(stripped, r"\s+" => " ") 
-                                nchars += length(stripped)
-                                cl += 1
-                                if cl % 10 == 0
-                                    test_line *= stripped
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-        pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
-        possible_pixel_per_char = pixel_for_chars/nchars
-        fsize = 1
-        c_pixel_per_char = 0
-        while c_pixel_per_char < possible_pixel_per_char
-            fontsize(fsize)
-            w_adv = textextents(test_line)[5]
-            w_adv /= length(test_line)
-            c_pixel_per_char = (line_margin+fsize)*w_adv
-            pixel_for_chars = (size_x-2*start_x-fsize/2)*(size_y-2*start_y)
-            possible_pixel_per_char = pixel_for_chars/nchars
-            fsize += 0.1
-        end
-        fsize -= 0.2
-        println("Automatic font size: ", fsize)
-        finish()
+        fsize = automatic_font_size(args, size_x, size_y)
     end
 
     Drawing(size_x, size_y, "code.png")
@@ -195,7 +229,7 @@ function create_poster(args)
     for (root, dirs, files) in walkdir(folder)
         if !occursin(ignore,root)
             for file in files
-                if occursin(ext_pattern, file)
+                if occursin(ext_pattern, extension(file))
                     open(root*"/"*file) do file
                         for ln in eachline(file)
                             stripped = strip(ln)*" "
@@ -250,24 +284,8 @@ function create_poster(args)
     text(center_text, (size_x-wtext)/2, (size_y-htext)/2+htext/2-ybtext/2)
     finish()
     println("Saved text")
-
-    text_img = load("text.png")
-    code_img = load("code.png")
-
-    last_check_params = Dict{Symbol,Any}()
-    last_check_params[:img] = text_img
-    last_check_params[:outside_color] = RGB(0,0,0)
-    last_check_params[:more_than] = 0.75 # 75%
     
-    println("Combining text and code...")
-    for y in 1:size_y, x in 1:size_x
-        if text_img[y,x] != RGB(0,0,0)
-            if !isapprox(code_img[y,x],RGB(0,0,0)) && !isapprox(code_img[y,x],center_color)
-                yx = CartesianIndex(y,x)
-                code_img = floodfill!(code_img, yx, RGB(0,0,0), center_color; last_check=more_than, last_check_params=last_check_params)
-            end
-        end
-    end
+    code_img = combine_text_code(center_color)
     save("poster.png", code_img)
     println("DONE!!!")
     println()
