@@ -10,12 +10,14 @@ function extension(filename::String)
     end
 end
 
-function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::Color, replace::Color; last_check=nothing, last_check_params=nothing)
-    if outside == replace
+function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::Color, replace::Color; 
+        last_check=nothing, last_check_params=nothing)
+    if isapprox(outside, replace; atol=0.05)
         @error "The outside color shouldn't be the same as the replace color"
         return img
     end
     isapprox(img[initnode],outside; atol=0.05) && return img
+    
     # constants
     north = CartesianIndex(-1,  0)
     south = CartesianIndex( 1,  0)
@@ -23,11 +25,12 @@ function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::
     west  = CartesianIndex( 0, -1)
  
     queue = [initnode]
+    sizehint!(queue,200)
     c = 1
     wnode = nothing
     enode = nothing
     changed_at = Vector{CartesianIndex}()
-    changed_from = Vector{RGB}()
+    sizehint!(changed_at, 200)
     while !isempty(queue)
         node = pop!(queue)
         if !isapprox(img[node],outside; atol=0.05) && img[node] != replace
@@ -37,7 +40,6 @@ function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::
         # Move west until color of node does match outside color
         while checkbounds(Bool, img, wnode) && !isapprox(img[wnode],outside; atol=0.05) && !isapprox(img[wnode],replace; atol=0.05)
             push!(changed_at, wnode)
-            push!(changed_from, img[wnode])
             img[wnode] = replace
             if checkbounds(Bool, img, wnode + north) && !isapprox(img[wnode + north],outside; atol=0.05) && !isapprox(img[wnode + north],replace; atol=0.05)
                 push!(queue, wnode + north)
@@ -50,7 +52,6 @@ function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::
         # Move east until color of node does match outside color
         while checkbounds(Bool, img, enode) && !isapprox(img[enode],outside; atol=0.05) && !isapprox(img[enode],replace; atol=0.05)
             push!(changed_at, enode)
-            push!(changed_from, img[enode])
             img[enode] = replace
             if checkbounds(Bool, img, enode + north) && !isapprox(img[enode + north],outside; atol=0.05) && !isapprox(img[enode + north],replace; atol=0.05)
                 push!(queue, enode + north)
@@ -63,7 +64,7 @@ function floodfill!(img::Matrix{<:Color}, initnode::CartesianIndex{2}, outside::
         c += 1
     end
     if last_check != nothing
-        return last_check(img, changed_at, changed_from, last_check_params)
+        return last_check(img, changed_at, [img[x] for x in changed_at], last_check_params)
     end
     return img
 end
@@ -183,13 +184,16 @@ function combine_text_code(center_color)
     size_y, size_x = size(text_img)
 
     println("Combining text and code...")
+    @time begin
     for y in 1:size_y, x in 1:size_x
         if text_img[y,x] != RGB(0,0,0)
             if !isapprox(code_img[y,x],RGB(0,0,0); atol=0.05) && !isapprox(code_img[y,x],center_color; atol=0.05)
                 yx = CartesianIndex(y,x)
-                code_img = floodfill!(code_img, yx, RGB(0,0,0), center_color; last_check=more_than, last_check_params=last_check_params)
+                code_img = floodfill!(code_img, yx, RGB(0,0,0), center_color; last_check=more_than, 
+                                      last_check_params=last_check_params)
             end
         end
+    end
     end
     return code_img
 end

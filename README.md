@@ -28,7 +28,7 @@ You need to be able to execute `poster.jl` so run sth like: `chmod +x poster.jl`
 Then you have the following options:
 
 ```
-usage: poster.jl -f FOLDER [--fsize FSIZE] [--ext EXT]
+usage: ./poster.jl -f FOLDER [--fsize FSIZE] [--ext EXT]
                  [--ignore IGNORE] [-t CENTER_TEXT]
                  [--fsize_text FSIZE_TEXT] [-c CENTER_COLOR]
                  [--code_color_range CODE_COLOR_RANGE] [--width WIDTH]
